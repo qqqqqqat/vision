@@ -40,6 +40,26 @@ def google_ocr(image):
     texts = response.text_annotations
     return texts[0].description if texts else ""
 
+# OCR ด้วย Google Vision API และส่ง Bounding Box กลับด้วย
+def google_ocr_with_boxes(image):
+    client = vision.ImageAnnotatorClient()
+    image_pil = Image.fromarray(image)
+    with io.BytesIO() as output:
+        image_pil.save(output, format="JPEG")
+        content = output.getvalue()
+    image = vision.Image(content=content)
+    response = client.text_detection(image=image)
+    texts = response.text_annotations
+
+    results = []
+    if texts:
+        for text in texts[1:]:  # ข้ามข้อความรวมทั้งหมด (texts[0])
+            box = [
+                {"x": vertex.x, "y": vertex.y} for vertex in text.bounding_poly.vertices
+            ]
+            results.append({"text": text.description, "box": box})
+    return results
+
 # แปลงข้อความเป็นเสียง
 def text_to_speech(text, lang='th'):
     tts = gTTS(text, lang=lang)
@@ -85,6 +105,17 @@ async def capture_image(file: UploadFile = File(...)):
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     captured_images.append(img)
     return JSONResponse({"message": "Image captured successfully"})
+
+@app.post("/api/detect_text")
+async def detect_text(file: UploadFile = File(...)):
+    contents = await file.read()
+    nparr = np.frombuffer(contents, np.uint8)
+    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+    # ดึงตำแหน่งของข้อความจาก OCR
+    detected_texts = google_ocr_with_boxes(img)
+
+    return {"detected_texts": detected_texts}
 
 # ประมวลผลภาพ: สร้างพาโนรามา, ครอปแนวนอน, เพิ่มความคมชัด, OCR, TTS
 @app.post("/api/process_image")
