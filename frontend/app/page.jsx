@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import { useGesture } from "@use-gesture/react";
+import { Toaster, toast } from "react-hot-toast"; // ✅ เพิ่ม Hot Toast
 import Camera from "../components/Camera";
 import ProgressBar from "../components/ProgressBar";
 import CaptureButton from "../components/Capture";
@@ -20,15 +21,15 @@ export default function HomePage() {
   const [audioUrl, setAudioUrl] = useState(null);
   const [processingComplete, setProcessingComplete] = useState(false);
   const pressStartTime = useRef(null);
+  const pressTimeoutRef = useRef(null);
   const webcamRef = useRef(null);
   const captureIntervalRef = useRef(null);
 
   // ✅ ถ่ายภาพปกติ
   const handleSingleCapture = async () => {
-    if (loading) return; // ❌ ป้องกันการกดซ้ำระหว่างโหลด
-
+    if (loading) return; // ❌ ป้องกันกดซ้ำ
     setLoading(true);
-    setProgress(20);
+    toast.loading("📸 กำลังประมวลผล...", { id: "processing" });
 
     if (webcamRef.current) {
       const imageSrc = webcamRef.current.getScreenshot();
@@ -39,20 +40,21 @@ export default function HomePage() {
           setBoundingBoxes(response.data.bounding_boxes);
           setOcrText(response.data.ocr_text);
           setAudioUrl(response.data.audio_url);
+          toast.success("✔ ถ่ายภาพสำเร็จ!", { id: "processing" });
         } catch (error) {
-          alert("📌 ไม่สามารถอ่านข้อความได้ กรุณาถ่ายใหม่!");
+          toast.error("📌 ไม่สามารถอ่านข้อความได้ กรุณาถ่ายใหม่!", { id: "processing" });
         }
       }
     }
-    setProgress(100);
-    setTimeout(() => setLoading(false), 500);
+    setLoading(false);
   };
 
-  // ✅ เริ่มถ่ายพาโนรามาทุก 1 วินาที (ป้องกันถ่ายซ้ำ)
+  // ✅ เริ่มถ่ายพาโนรามาทุก 1 วินาที
   const startPanoramaCapture = () => {
-    if (captureIntervalRef.current) return; // ❌ ป้องกันการถ่ายซ้ำ
-
+    if (captureIntervalRef.current) return; // ❌ ป้องกันถ่ายซ้ำ
     setCapturing(true);
+    toast.loading("📸 กำลังถ่ายพาโนรามา...", { id: "processing" });
+
     captureIntervalRef.current = setInterval(async () => {
       if (webcamRef.current) {
         const imageSrc = webcamRef.current.getScreenshot();
@@ -72,7 +74,7 @@ export default function HomePage() {
 
     setCapturing(false);
     setLoading(true);
-    setProgress(30);
+    toast.loading("🛠️ กำลังประมวลผลภาพพาโนรามา...", { id: "processing" });
 
     try {
       const response = await processImage();
@@ -80,40 +82,45 @@ export default function HomePage() {
       setBoundingBoxes(response.data.bounding_boxes);
       setOcrText(response.data.ocr_text);
       setAudioUrl(response.data.audio_url);
-      setProgress(100);
+      toast.success("✔ ประมวลผลเสร็จสิ้น!", { id: "processing" });
       setProcessingComplete(true);
     } catch (error) {
-      alert("📌 ไม่สามารถสร้างพาโนรามาได้ กรุณาถ่ายใหม่!");
+      toast.error("📌 ไม่สามารถสร้างพาโนรามาได้ กรุณาถ่ายใหม่!", { id: "processing" });
     }
 
-    setTimeout(() => setLoading(false), 500);
+    setLoading(false);
   };
 
   // ✅ ตรวจจับการกดปุ่ม
   const bind = useGesture({
     onPointerDown: () => {
-      if (loading) return; // ❌ ป้องกันการกดถ่ายซ้ำระหว่างโหลด
+      if (loading) return; // ❌ ป้องกันกดซ้ำ
+
       pressStartTime.current = Date.now();
 
-      if (!capturing) {
+      // ตั้งเวลา ถ้ากดค้างเกิน 500ms จะเริ่มถ่ายพาโนรามา
+      pressTimeoutRef.current = setTimeout(() => {
         startPanoramaCapture();
-      }
+      }, 500);
     },
     onPointerUp: async () => {
-      const pressDuration = Date.now() - pressStartTime.current;
+      clearTimeout(pressTimeoutRef.current); // ✅ ล้าง timeout ป้องกันถ่ายพาโนรามาผิดพลาด
 
-      if (pressDuration < 300) {
-        await handleSingleCapture();
+      if (captureIntervalRef.current) {
+        await stopPanoramaCapture(); // ✅ หยุดการถ่ายพาโนรามาเมื่อปล่อยนิ้ว
       } else {
-        await stopPanoramaCapture();
+        await handleSingleCapture(); // ✅ ถ่ายภาพปกติ
       }
     },
   });
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-900 text-white">
-      <h1 className="text-3xl font-bold mb-6">📸 ระบบถ่ายภาพ</h1>
+      <Toaster position="top-center" reverseOrder={false} /> {/* ✅ Hot Toast */}
+
+      <h1 className="text-2xl font-bold mb-6">📸 ระบบถ่ายภาพ</h1>
       {processingComplete && <p className="text-green-400 font-bold">✔ ประมวลผลเสร็จสิ้น</p>}
+
       <Camera capturing={capturing} webcamRef={webcamRef} />
       {loading && <ProgressBar progress={progress} />}
       <CaptureButton bind={bind} capturing={capturing} disabled={loading} />
