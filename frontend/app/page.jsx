@@ -119,7 +119,6 @@ export default function HomePage() {
       <Toaster position="top-center" reverseOrder={false} /> {/* ✅ Hot Toast */}
 
       <h1 className="text-2xl font-bold mb-6">📸 ระบบถ่ายภาพ</h1>
-      {processingComplete && <p className="text-green-400 font-bold">✔ ประมวลผลเสร็จสิ้น</p>}
 
       <Camera capturing={capturing} webcamRef={webcamRef} />
       {loading && <ProgressBar progress={progress} />}
