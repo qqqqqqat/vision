@@ -13,75 +13,110 @@ import { captureImage, captureSingleImage, processImage } from "../services/api"
 export default function HomePage() {
   const [capturing, setCapturing] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [processedImage, setProcessedImage] = useState(null);
   const [boundingBoxes, setBoundingBoxes] = useState([]);
   const [ocrText, setOcrText] = useState("");
   const [audioUrl, setAudioUrl] = useState(null);
+  const [processingComplete, setProcessingComplete] = useState(false);
   const pressStartTime = useRef(null);
   const webcamRef = useRef(null);
+  const captureIntervalRef = useRef(null);
 
-  // Function สำหรับกดถ่ายภาพปกติ
+  // ✅ ถ่ายภาพปกติ
   const handleSingleCapture = async () => {
+    if (loading) return; // ❌ ป้องกันการกดซ้ำระหว่างโหลด
+
+    setLoading(true);
+    setProgress(20);
+
     if (webcamRef.current) {
       const imageSrc = webcamRef.current.getScreenshot();
       if (imageSrc) {
-        const response = await captureSingleImage(imageSrc);
-        setProcessedImage(`http://192.168.35.43:8000${response.data.processed_image}`);
-        setBoundingBoxes(response.data.bounding_boxes);
-        setOcrText(response.data.ocr_text);
-        setAudioUrl(`http://192.168.35.43:8000${response.data.audio_url}`);
-      } else {
-        console.error("ไม่สามารถจับภาพได้");
+        try {
+          const response = await captureSingleImage(imageSrc);
+          setProcessedImage(response.data.processed_image);
+          setBoundingBoxes(response.data.bounding_boxes);
+          setOcrText(response.data.ocr_text);
+          setAudioUrl(response.data.audio_url);
+        } catch (error) {
+          alert("📌 ไม่สามารถอ่านข้อความได้ กรุณาถ่ายใหม่!");
+        }
       }
-    } else {
-      console.error("Webcam ยังไม่ถูกโหลดสมบูรณ์");
     }
+    setProgress(100);
+    setTimeout(() => setLoading(false), 500);
   };
-  
 
-  // Function สำหรับการถ่ายพาโนรามา
-  const handlePanoramaCapture = async () => {
+  // ✅ เริ่มถ่ายพาโนรามาทุก 1 วินาที (ป้องกันถ่ายซ้ำ)
+  const startPanoramaCapture = () => {
+    if (captureIntervalRef.current) return; // ❌ ป้องกันการถ่ายซ้ำ
+
+    setCapturing(true);
+    captureIntervalRef.current = setInterval(async () => {
+      if (webcamRef.current) {
+        const imageSrc = webcamRef.current.getScreenshot();
+        if (imageSrc) {
+          await captureImage(imageSrc);
+        }
+      }
+    }, 1000);
+  };
+
+  // ✅ หยุดถ่ายพาโนรามาและประมวลผล
+  const stopPanoramaCapture = async () => {
+    if (captureIntervalRef.current) {
+      clearInterval(captureIntervalRef.current);
+      captureIntervalRef.current = null;
+    }
+
     setCapturing(false);
     setLoading(true);
-    const response = await processImage();
-    setProcessedImage(`http://192.168.35.43:8000${response.data.processed_image}`);
-    setBoundingBoxes(response.data.bounding_boxes);
-    setOcrText(response.data.ocr_text);
-    setAudioUrl(`http://192.168.35.43:8000${response.data.audio_url}`);
-    setLoading(false);
+    setProgress(30);
+
+    try {
+      const response = await processImage();
+      setProcessedImage(response.data.processed_image);
+      setBoundingBoxes(response.data.bounding_boxes);
+      setOcrText(response.data.ocr_text);
+      setAudioUrl(response.data.audio_url);
+      setProgress(100);
+      setProcessingComplete(true);
+    } catch (error) {
+      alert("📌 ไม่สามารถสร้างพาโนรามาได้ กรุณาถ่ายใหม่!");
+    }
+
+    setTimeout(() => setLoading(false), 500);
   };
 
-  // ตรวจจับการกดปุ่มและปล่อย
+  // ✅ ตรวจจับการกดปุ่ม
   const bind = useGesture({
     onPointerDown: () => {
+      if (loading) return; // ❌ ป้องกันการกดถ่ายซ้ำระหว่างโหลด
       pressStartTime.current = Date.now();
-      setCapturing(true);
+
+      if (!capturing) {
+        startPanoramaCapture();
+      }
     },
     onPointerUp: async () => {
       const pressDuration = Date.now() - pressStartTime.current;
-      setCapturing(false);
 
       if (pressDuration < 300) {
-        // ถ่ายภาพปกติ
-        setLoading(true);
         await handleSingleCapture();
-        setLoading(false);
       } else {
-        // ถ่ายภาพพาโนรามา
-        setLoading(true);
-        await handlePanoramaCapture();
-        setLoading(false);
+        await stopPanoramaCapture();
       }
     },
   });
 
   return (
-    <div data-theme="dark" className="min-h-screen bg-base-200 text-white flex flex-col items-center justify-center">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-900 text-white">
       <h1 className="text-3xl font-bold mb-6">📸 ระบบถ่ายภาพ</h1>
-
+      {processingComplete && <p className="text-green-400 font-bold">✔ ประมวลผลเสร็จสิ้น</p>}
       <Camera capturing={capturing} webcamRef={webcamRef} />
-      {loading && <ProgressBar />}
-      <CaptureButton bind={bind} capturing={capturing} />
+      {loading && <ProgressBar progress={progress} />}
+      <CaptureButton bind={bind} capturing={capturing} disabled={loading} />
       {processedImage && <ProcessedImage processedImage={processedImage} boundingBoxes={boundingBoxes} />}
       {ocrText && <OCRText text={ocrText} />}
       {audioUrl && <AudioPlayer audioUrl={audioUrl} />}

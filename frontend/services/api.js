@@ -6,18 +6,14 @@ export const captureImage = async (imageSrc) => {
   const formData = new FormData();
   formData.append("file", dataURLtoBlob(imageSrc), "capture.jpg");
 
-  return await axios.post(`${API_BASE_URL}/capture`, formData, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
+  return await axios.post(`${API_BASE_URL}/capture`, formData);
 };
 
 export const captureSingleImage = async (imageSrc) => {
   const formData = new FormData();
   formData.append("file", dataURLtoBlob(imageSrc), "single_capture.jpg");
 
-  return await axios.post(`${API_BASE_URL}/capture_single`, formData, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
+  return await axios.post(`${API_BASE_URL}/capture_single`, formData);
 };
 
 export const processImage = async () => {

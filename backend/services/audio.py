@@ -1,10 +1,13 @@
-from gtts import gTTS
+import os
 import uuid
+from gtts import gTTS
 from config import AUDIO_FOLDER
 
-# แปลงข้อความเป็นไฟล์เสียง
 def text_to_speech(text, lang='th'):
-    filename = f"{AUDIO_FOLDER}/audio_{uuid.uuid4()}.mp3"
+    audio_filename = f"audio_{uuid.uuid4()}.mp3"
+    audio_path = os.path.join(AUDIO_FOLDER, audio_filename)
+
     tts = gTTS(text, lang=lang)
-    tts.save(filename)
-    return filename
+    tts.save(audio_path)
+
+    return audio_filename
